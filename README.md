@@ -1,0 +1,82 @@
+# Protección de una instalación nueva de Ubuntu
+
+El archivo `proteger-ubuntu.sh` configura el servidor de forma interactiva en una sola ejecución. No instala Docker, no añade su repositorio y no descarga programas de instalación externos.
+
+## Ejecución
+
+Sube `proteger-ubuntu.sh` al servidor mediante tu cliente SFTP o SCP. En la sesión donde entras como root, ve a la carpeta donde lo guardaste y ejecuta:
+
+```bash
+bash proteger-ubuntu.sh
+```
+
+No necesitas editar el archivo ni instalar manualmente sus paquetes. Necesitas Internet para los repositorios de Ubuntu, una terminal interactiva y acceso a la consola del proveedor para una eventual recuperación. Mantén abierta la sesión inicial.
+
+El script solicitará:
+
+1. Un nombre para crear el administrador.
+2. Los puertos adicionales que necesitas. Para una web convencional: `80/tcp 443/tcp`. Enter deja solamente las excepciones SSH y las reglas que ya existan. Abrir un puerto no instala el servicio correspondiente.
+3. Opcionalmente, tu llave SSH **pública**. Puedes dejarla vacía y continuar usando contraseña. Nunca proporciones una llave privada.
+4. Una contraseña para el nuevo administrador, que también necesitarás con `sudo`. Usa una contraseña larga y exclusiva.
+5. Dos comprobaciones de acceso desde otra terminal, guiadas dentro de la misma ejecución.
+
+En esas comprobaciones entra con el administrador al mismo servidor y puerto que utilizas ahora y ejecuta `sudo -k` seguido de `sudo id -u`. El resultado debe ser `0`. Si proporcionaste una llave, utiliza el comando indicado por el script, que impide recurrir a contraseña para esa prueba. Escribe `CONFIRMADO` en la sesión inicial solo después de comprobar el acceso y sudo.
+
+La primera prueba verifica el administrador y el firewall. La segunda verifica el acceso después de desactivar SSH para root. Cada pregunta admite hasta diez minutos. No son instalaciones adicionales: son comprobaciones desde tu computadora que el servidor no puede realizar en tu nombre.
+
+## Compatibilidad
+
+Está diseñado para Ubuntu Server 22.04 o posterior, con systemd y OpenSSH ya funcionando, en una instalación nueva. Actualiza `distro-info-data` y consulta su calendario para admitir únicamente versiones publicadas con soporte estándar vigente según la fecha del servidor. No utiliza una lista fija de nombres de versiones.
+
+No promete compatibilidad universal. Se detiene ante versiones desconocidas, preliminares, fuera de soporte estándar, repositorios que fallen, componentes ausentes o configuraciones SSH personalizadas con `Match`. No acepta versiones antiguas solamente por contar con Ubuntu Pro/ESM. Las versiones futuras admitidas por sus metadatos siguen necesitando validación práctica de compatibilidad.
+
+Antes de comprobar soporte puede actualizar índices de APT e instalar/actualizar `python3` y `distro-info-data`; todavía no modifica SSH ni el firewall. Si encuentra un problema después, informa del fallo y no declara la instalación completa.
+
+## Qué configura
+
+- Crea una cuenta normal y la añade al grupo `sudo`. En ejecuciones posteriores solo reutiliza el usuario registrado por el propio script; no eleva silenciosamente una cuenta preexistente ajena.
+- Conserva los puertos SSH declarados y el puerto observado en la conexión actual. No cambia `Port`, `ListenAddress` ni `ssh.socket`.
+- Valida SSH antes de recargarlo. Conserva el método inicial hasta confirmar el administrador. Al terminar bloquea el acceso SSH directo de root. Sin llave pública, permite contraseña para el administrador; con llave pública comprobada, desactiva contraseña e interacción por teclado en SSH. La contraseña local de root no se elimina.
+- Limita intentos y conexiones SSH sin autenticar, rechaza contraseñas vacías, desactiva X11 y registra más detalles de autenticación. Conserva los algoritmos criptográficos del OpenSSH suministrado por Ubuntu.
+- Activa UFW para IPv4 e IPv6, deniega entrada por defecto y permite salida. Añade excepciones SSH y los puertos elegidos. **Conserva las reglas UFW preexistentes**: volver a ejecutar con menos puertos no elimina excepciones anteriores. No administra firewalls externos del proveedor ni reglas ajenas a UFW.
+- Configura explícitamente la protección SSH de Fail2ban usando el journal de systemd: seis fallos en diez minutos producen un bloqueo de una hora. No depende de que exista `/var/log/auth.log`. Las direcciones de administración no quedan permanentemente exentas; varios usuarios detrás de una misma IP pueden compartir un bloqueo.
+- Actualiza paquetes y activa actualizaciones automáticas de seguridad de Ubuntu. Las fuentes ESM solo aportan actualizaciones cuando corresponda y estén disponibles; no contrata ni activa Ubuntu Pro. No hace una actualización de versión de la distribución.
+- Activa los perfiles disponibles de AppArmor si el kernel lo admite. Si no está disponible, muestra un aviso. Instalar AppArmor no crea perfiles para todas las aplicaciones futuras.
+- Aplica ajustes disponibles del kernel: SYN cookies, restricciones de redirecciones y rutas de origen, protección de enlaces y restricciones de información del kernel. No desactiva IPv6 ni cambia el reenvío IP o la configuración de red del proveedor.
+- Guarda registros y respaldos privados bajo `/var/lib/proteger-ubuntu/ejecucion-FECHA-.../`.
+
+No reinicia automáticamente. Si Ubuntu necesita reiniciar para activar un kernel actualizado u otros cambios, lo indica al final. Ese reinicio queda pendiente hasta que tú lo programes. Las actualizaciones de paquetes pueden recargar servicios durante la instalación.
+
+## Recuperación
+
+Antes de cada fase de conectividad guarda SSH, UFW y su archivo de Fail2ban. Programa una recuperación mediante un temporizador de systemd a quince minutos. Confirmar correctamente cancela esa recuperación. Si cancelas la pregunta o el proceso termina con un error, intenta restaurar inmediatamente; si se pierde el proceso, el temporizador sirve de respaldo mientras el servidor siga encendido y systemd funcione.
+
+La primera recuperación vuelve al estado anterior a configurar la conectividad. La segunda vuelve al estado que ya habías comprobado antes de cerrar el acceso de root. Esto puede volver a permitir root o contraseñas: revisa el registro y completa la configuración posteriormente.
+
+Si necesitas una recuperación manual desde la consola del proveedor, localiza la carpeta de la fase fallida (`inicial` o `cierre-root`) dentro del directorio de ejecución mostrado por el script y ejecuta su `recuperar.sh` con Bash como root. El archivo `recuperacion.log` muestra el resultado. Una fase ya confirmada no se revierte al ejecutar ese auxiliar; sus respaldos quedan disponibles para revisión manual.
+
+El temporizador es transitorio: no sobrevive a un reinicio. No reinicies durante las pruebas. No puede corregir una caída del proveedor, un fallo de disco o un firewall externo.
+
+La recuperación automática **solo abarca conectividad**. No desinstala actualizaciones, elimina usuarios ni revierte AppArmor o los ajustes adicionales. Estos últimos conservan respaldos en `configuracion-adicional.tar` y valores anteriores en `sysctl-anterior.conf`; no es una instantánea completa del servidor. Una ejecución fallida puede dejar protección parcial, y volver a ejecutar no equivale a deshacerla.
+
+## Revisión del script de referencia
+
+La revisión del [script original de Tony Teaches Tech](https://github.com/tonyflo/ttt-vps-scripts/blob/main/setup-docker.sh) identificó estos puntos:
+
+- Desactiva la contraseña SSH de root antes de comprobar una conexión con el nuevo usuario.
+- Usa el perfil UFW `OpenSSH`, que puede no representar un puerto personalizado.
+- Instala e inicia Fail2ban sin definir expresamente la protección SSH en el propio script.
+- Descarga y ejecuta el instalador de Docker y añade el usuario a su grupo.
+- Puede reiniciar automáticamente cinco segundos después de detectar que hace falta.
+
+La entrega es una implementación independiente que atiende esos puntos e incorpora validación de soporte, comprobaciones de acceso y recuperación de conectividad.
+
+Referencias técnicas: [OpenSSH en Ubuntu](https://ubuntu.com/server/docs/how-to/security/openssh-server/), [opciones de sshd](https://manpages.ubuntu.com/manpages/noble/man5/sshd_config.5.html), [UFW en Ubuntu](https://ubuntu.com/server/docs/how-to/security/firewalls/), [actualizaciones automáticas](https://ubuntu.com/server/docs/how-to/software/automatic-updates/) y [configuración oficial de Fail2ban](https://github.com/fail2ban/fail2ban/blob/master/config/jail.conf).
+
+## Validación y alcance
+
+Se comprobó la sintaxis Bash, se pasó ShellCheck y se probaron validaciones de entradas, la política de soporte, las tres políticas SSH y rutas de recuperación con comandos simulados. Las configuraciones SSH se validaron con el OpenSSH disponible en el entorno de desarrollo macOS; esto no sustituye probar los paquetes de Ubuntu.
+
+**No se ha ejecutado una instalación completa en un VPS Ubuntu ni se ha verificado ningún servidor tuyo.** APT, UFW, Fail2ban, AppArmor y los temporizadores se comprueban al ejecutar el script, pero su integración completa queda sin probar aquí. Para producción, valida primero en un VPS nuevo desechable o con una instantánea recuperable.
+
+Esto aporta una base de protección del sistema. La seguridad de las aplicaciones, sus credenciales, TLS, copias externas y la resistencia a ataques volumétricos requieren medidas correspondientes a esos servicios; el script no garantiza impedir todos los ataques.

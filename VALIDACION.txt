@@ -1,0 +1,35 @@
+OK: validación de puerto '22'
+OK: validación de puerto '65535'
+OK: validación de puerto '0'
+OK: validación de puerto '65536'
+OK: validación de puerto '08'
+OK: validación de puerto '22;id'
+OK: validación de puerto '-1'
+OK: validación de puerto '999999999999999'
+OK: validación de usuario 'operador'
+OK: validación de usuario 'root'
+OK: validación de usuario 'a-b_2'
+OK: validación de usuario 'bad name'
+OK: validación de usuario '--root'
+OK: validación de usuario 'x;id'
+OK: soporte de versión 22.04
+OK: soporte de versión 20.04
+OK: soporte de versión 99.04
+OK: soporte de versión 55.55
+OK: Include SSH normal y Match comentado admitidos
+OK: rechaza Match dentro de Include
+OK: llave temporal para validar SSH
+OK: sintaxis SSH root=yes, contraseña=yes: 
+OK: política SSH efectiva root=yes, contraseña=yes
+OK: sintaxis SSH root=no, contraseña=yes: 
+OK: política SSH efectiva root=no, contraseña=yes
+OK: sintaxis SSH root=no, contraseña=no: 
+OK: política SSH efectiva root=no, contraseña=no
+OK: recuperación completada (comandos simulados)
+OK: recupera firewall activo, SSH y Fail2ban
+OK: recuperación repetida no vuelve a modificar configuración
+OK: confirmación impide una recuperación tardía
+OK: fallo de SSH no se presenta como recuperación exitosa
+OK: recupera estados originalmente inactivos
+
+33 comprobaciones aprobadas. No se ha ejecutado una instalación Ubuntu completa.
