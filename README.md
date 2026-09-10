@@ -24,6 +24,103 @@ En esas comprobaciones entra con el administrador al mismo servidor y puerto que
 
 La primera prueba verifica el administrador y el firewall. La segunda verifica el acceso después de desactivar SSH para root. Cada pregunta admite hasta diez minutos. No son instalaciones adicionales: son comprobaciones desde tu computadora que el servidor no puede realizar en tu nombre.
 
+## Crear y utilizar una llave SSH pública (Windows, macOS y Linux)
+
+Este paso es opcional. Si prefieres continuar con contraseña, deja vacío el campo de llave pública del script y presiona **Enter**.
+
+La llave se crea en **la computadora desde la que te conectarás**, no dentro de la sesión del servidor. Se generan dos archivos: una llave privada que conservas en esa computadora y una pública que instalarás en el servidor. Mantén abierta la sesión inicial mientras realizas estos pasos en otra ventana.
+
+### 1. Abrir una terminal local
+
+- **Windows:** abre PowerShell o Windows Terminal con PowerShell. Necesitas el componente **Cliente OpenSSH**; si `ssh-keygen` no se reconoce, instálalo desde las características opcionales de Windows. No necesitas instalar el servidor OpenSSH en tu computadora.
+- **macOS:** abre Terminal.
+- **Linux:** abre una terminal. Si falta `ssh-keygen`, instala el cliente OpenSSH con el gestor de paquetes de tu distribución; en Ubuntu/Debian el paquete es `openssh-client`.
+
+### 2. Generar el par de llaves
+
+El comando es el mismo en los tres sistemas:
+
+```text
+ssh-keygen -t ed25519
+```
+
+Cuando pregunte dónde guardar la llave, presiona **Enter** para aceptar la ubicación predeterminada. Normalmente será `.ssh/id_ed25519` dentro de tu carpeta de usuario.
+
+**Si indica que el archivo ya existe, responde `n` para no sobrescribirlo.** Puedes utilizar esa llave si te pertenece y conoces su frase de contraseña. Para crear una distinta, vuelve a ejecutar el comando y escribe otra ruta cuando la solicite. Conserva esa ruta: tendrás que usarla en los pasos siguientes.
+
+Cuando solicite una frase de contraseña (*passphrase*), escribe una frase larga para proteger la llave privada y repítela. No se mostrarán caracteres mientras escribes. Esta frase protege la llave en tu computadora; es diferente de la contraseña del administrador del servidor.
+
+### 3. Mostrar o copiar solamente la llave pública
+
+Estos comandos suponen que aceptaste el nombre predeterminado. Si elegiste otro, sustituye la ruta por la de tu archivo terminado en `.pub`.
+
+**Windows — PowerShell:**
+
+```powershell
+Get-Content "$env:USERPROFILE\.ssh\id_ed25519.pub"
+```
+
+Para copiarla al portapapeles:
+
+```powershell
+Get-Content "$env:USERPROFILE\.ssh\id_ed25519.pub" | Set-Clipboard
+```
+
+**macOS — Terminal:**
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+Para copiarla al portapapeles:
+
+```bash
+pbcopy < ~/.ssh/id_ed25519.pub
+```
+
+**Linux — Terminal:**
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+Selecciona y copia toda la salida con la función de copiar de tu terminal. No necesitas instalar una herramienta adicional de portapapeles.
+
+La llave pública es una sola línea que empieza por `ssh-ed25519`, seguida de una cadena larga y, normalmente, un comentario. Aunque la terminal la muestre repartida visualmente en varios renglones, cópiala completa sin introducir saltos de línea ni incluir el indicador de la terminal.
+
+### 4. Pegar la llave en el script
+
+Regresa a la sesión del servidor cuando aparezca:
+
+```text
+Pega tu llave SSH PÚBLICA en una línea (Enter = continuar con contraseña):
+```
+
+Pega la línea completa y presiona **Enter**. El script la validará e instalará para el nuevo administrador; no necesitas ejecutar `ssh-copy-id` ni editar `authorized_keys` manualmente.
+
+**Comparte únicamente la llave pública, el archivo terminado en `.pub`. Nunca pegues, subas a GitHub ni envíes la llave privada `id_ed25519` o su frase de contraseña.**
+
+### 5. Comprobar el acceso desde tu computadora
+
+Espera a que el script te pida comprobar la conexión. En otra terminal local, utiliza el comando que muestra el script sustituyendo el usuario, la dirección y el puerto por los de tu servidor. Ejemplo con el puerto SSH habitual:
+
+```text
+ssh -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -p 22 USUARIO@IP_DEL_SERVIDOR
+```
+
+Este comando funciona en Windows con OpenSSH, macOS y Linux. Puede pedirte la frase de contraseña de la llave privada; eso es normal y no significa que esté utilizando la contraseña SSH del servidor. Si aparece un aviso de identidad del servidor, verifica su huella con la consola del servidor antes de aceptarlo.
+
+Si guardaste la llave con otro nombre, añade `-i RUTA_DE_LA_LLAVE_PRIVADA` al comando SSH. Usa la ruta de tu computadora **sin `.pub`**; SSH lee ese archivo localmente y no lo copia al servidor.
+
+Dentro de la conexión nueva ejecuta:
+
+```bash
+sudo -k
+sudo id -u
+```
+
+Introduce la contraseña del administrador cuando `sudo` la solicite. Debe mostrar `0`. Solo entonces vuelve a la sesión inicial y escribe `CONFIRMADO`. Repite la comprobación con una conexión nueva cuando el script lo solicite por segunda vez. Si el acceso falla, no confirmes ni cierres la sesión inicial.
+
 ## Compatibilidad
 
 Está diseñado para Ubuntu Server 22.04 o posterior, con systemd y OpenSSH ya funcionando, en una instalación nueva. Actualiza `distro-info-data` y consulta su calendario para admitir únicamente versiones publicadas con soporte estándar vigente según la fecha del servidor. No utiliza una lista fija de nombres de versiones.
