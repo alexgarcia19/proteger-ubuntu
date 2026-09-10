@@ -102,10 +102,10 @@ Pega la línea completa y presiona **Enter**. El script la validará e instalar�
 
 ### 5. Comprobar el acceso desde tu computadora
 
-Espera a que el script te pida comprobar la conexión. En otra terminal local, utiliza el comando que muestra el script sustituyendo el usuario, la dirección y el puerto por los de tu servidor. Ejemplo con el puerto SSH habitual:
+Espera a que el script te pida comprobar la conexión. En otra terminal local, utiliza el comando que muestra el script sustituyendo el usuario, la dirección y el puerto por los de tu servidor. Reemplaza `USER` por tu usuario administrador e `IP_DEL_SERVIDOR` por la dirección del servidor. Ejemplo con el puerto SSH habitual:
 
 ```text
-ssh -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -p 22 USUARIO@IP_DEL_SERVIDOR
+ssh -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -p 22 USER@IP_DEL_SERVIDOR
 ```
 
 Este comando funciona en Windows con OpenSSH, macOS y Linux. Puede pedirte la frase de contraseña de la llave privada; eso es normal y no significa que esté utilizando la contraseña SSH del servidor. Si aparece un aviso de identidad del servidor, verifica su huella con la consola del servidor antes de aceptarlo.
@@ -120,6 +120,84 @@ sudo id -u
 ```
 
 Introduce la contraseña del administrador cuando `sudo` la solicite. Debe mostrar `0`. Solo entonces vuelve a la sesión inicial y escribe `CONFIRMADO`. Repite la comprobación con una conexión nueva cuando el script lo solicite por segunda vez. Si el acceso falla, no confirmes ni cierres la sesión inicial.
+
+## Agregar una PC nueva al servidor
+
+Para conectarte desde otra computadora, crea una llave SSH en ella y agrega **su llave pública** al usuario administrador del servidor. No necesitas volver a ejecutar el script ni reiniciar SSH.
+
+En los comandos siguientes, **reemplaza `USER` por tu usuario administrador** e **`IP_DEL_SERVIDOR` por la dirección del servidor**. Se usa el puerto `22` como ejemplo; sustitúyelo si tu servidor utiliza otro puerto.
+
+### 1. Crear una llave en la PC nueva
+
+Abre PowerShell en Windows o una terminal en macOS/Linux y ejecuta:
+
+```text
+ssh-keygen -t ed25519
+```
+
+Acepta la ubicación predeterminada y establece una frase de contraseña. Si ya existe una llave, no la sobrescribas. Para más detalles, consulta la sección anterior sobre creación de llaves.
+
+### 2. Copiar la llave pública de la PC nueva
+
+**Windows — PowerShell:**
+
+```powershell
+Get-Content "$env:USERPROFILE\.ssh\id_ed25519.pub"
+```
+
+**macOS o Linux:**
+
+```bash
+cat ~/.ssh/id_ed25519.pub
+```
+
+Copia toda la línea que empieza con `ssh-ed25519`. Si guardaste la llave con otro nombre, utiliza la ruta correspondiente al archivo `.pub`. Lleva esa línea a la computadora que ya tiene acceso al servidor; la llave privada permanece en la PC nueva.
+
+### 3. Autorizarla desde la computadora que ya tiene acceso
+
+Desde la computadora autorizada, conéctate al servidor:
+
+```text
+ssh -p 22 USER@IP_DEL_SERVIDOR
+```
+
+Dentro de esa sesión, abre el archivo de llaves del usuario:
+
+```bash
+nano ~/.ssh/authorized_keys
+```
+
+Ejecuta este comando como **`USER`**, sin cambiar a root: `~` representa la carpeta personal de la cuenta con la que estás conectado. Si no tienes `nano`, utiliza otro editor de texto disponible.
+
+Añade la llave pública de la PC nueva **en una línea nueva**, conservando todas las llaves existentes. Cada llave debe ocupar una sola línea. En nano, guarda con **Ctrl+O**, presiona **Enter** y sal con **Ctrl+X**.
+
+Después ajusta los permisos:
+
+```bash
+chmod 700 ~/.ssh
+chmod 600 ~/.ssh/authorized_keys
+```
+
+### 4. Comprobar el acceso desde la PC nueva
+
+En una terminal de la PC nueva, ejecuta:
+
+```text
+ssh -o PasswordAuthentication=no -o KbdInteractiveAuthentication=no -p 22 USER@IP_DEL_SERVIDOR
+```
+
+Si elegiste un nombre diferente para la llave, añade `-i RUTA_DE_LA_LLAVE_PRIVADA` con su ruta local, sin `.pub`. Puede solicitar la frase de contraseña de esa llave.
+
+Una vez conectado, comprueba los permisos del administrador:
+
+```bash
+sudo -k
+sudo id -u
+```
+
+Introduce la contraseña del usuario cuando se solicite; debe mostrar `0`. **Mantén abierta la conexión anterior hasta verificar que la PC nueva puede entrar.**
+
+Cada computadora conserva su propia llave privada. Solo se añade al servidor la pública, terminada en `.pub`; no copies la llave privada de una computadora a otra.
 
 ## Compatibilidad
 
@@ -156,24 +234,6 @@ El temporizador es transitorio: no sobrevive a un reinicio. No reinicies durante
 
 La recuperación automática **solo abarca conectividad**. No desinstala actualizaciones, elimina usuarios ni revierte AppArmor o los ajustes adicionales. Estos últimos conservan respaldos en `configuracion-adicional.tar` y valores anteriores en `sysctl-anterior.conf`; no es una instantánea completa del servidor. Una ejecución fallida puede dejar protección parcial, y volver a ejecutar no equivale a deshacerla.
 
-## Revisión del script de referencia
-
-La revisión del [script original de Tony Teaches Tech](https://github.com/tonyflo/ttt-vps-scripts/blob/main/setup-docker.sh) identificó estos puntos:
-
-- Desactiva la contraseña SSH de root antes de comprobar una conexión con el nuevo usuario.
-- Usa el perfil UFW `OpenSSH`, que puede no representar un puerto personalizado.
-- Instala e inicia Fail2ban sin definir expresamente la protección SSH en el propio script.
-- Descarga y ejecuta el instalador de Docker y añade el usuario a su grupo.
-- Puede reiniciar automáticamente cinco segundos después de detectar que hace falta.
-
-La entrega es una implementación independiente que atiende esos puntos e incorpora validación de soporte, comprobaciones de acceso y recuperación de conectividad.
+## Referencias técnicas
 
 Referencias técnicas: [OpenSSH en Ubuntu](https://ubuntu.com/server/docs/how-to/security/openssh-server/), [opciones de sshd](https://manpages.ubuntu.com/manpages/noble/man5/sshd_config.5.html), [UFW en Ubuntu](https://ubuntu.com/server/docs/how-to/security/firewalls/), [actualizaciones automáticas](https://ubuntu.com/server/docs/how-to/software/automatic-updates/) y [configuración oficial de Fail2ban](https://github.com/fail2ban/fail2ban/blob/master/config/jail.conf).
-
-## Validación y alcance
-
-Se comprobó la sintaxis Bash, se pasó ShellCheck y se probaron validaciones de entradas, la política de soporte, las tres políticas SSH y rutas de recuperación con comandos simulados. Las configuraciones SSH se validaron con el OpenSSH disponible en el entorno de desarrollo macOS; esto no sustituye probar los paquetes de Ubuntu.
-
-**No se ha ejecutado una instalación completa en un VPS Ubuntu ni se ha verificado ningún servidor tuyo.** APT, UFW, Fail2ban, AppArmor y los temporizadores se comprueban al ejecutar el script, pero su integración completa queda sin probar aquí. Para producción, valida primero en un VPS nuevo desechable o con una instantánea recuperable.
-
-Esto aporta una base de protección del sistema. La seguridad de las aplicaciones, sus credenciales, TLS, copias externas y la resistencia a ataques volumétricos requieren medidas correspondientes a esos servicios; el script no garantiza impedir todos los ataques.
